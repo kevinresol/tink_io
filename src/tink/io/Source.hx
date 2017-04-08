@@ -2,6 +2,7 @@ package tink.io;
 
 import haxe.io.Bytes;
 import tink.io.Sink;
+import tink.io.StreamParser;
 import tink.streams.IdealStream;
 import tink.streams.Stream;
 
@@ -44,6 +45,24 @@ abstract Source<E>(SourceObject<E>) from SourceObject<E> to SourceObject<E> to S
 
   public function pipeTo<EOut, Result>(target:SinkYielding<EOut, Result>, ?options):Future<PipeResult<E, EOut, Result>> 
     return target.consume(this, options);
+    
+  public function split(delim:Chunk):Pair<RealSource, RealSource> {
+    
+    var f = StreamParser.parse(this, new Splitter(delim));
+    return new Pair<RealSource, RealSource>(
+      ofPromised(f.map(function(r) return switch r {
+        case Parsed(data, _): Success(ofChunk(data));
+        case Invalid(e, _): Failure(e);
+        case Broke(e): Failure(e);
+      })),
+      ofPromised(f.map(function(r) return switch r {
+        case Parsed(data, rest): Success(cast rest);
+        case Invalid(e, rest): Success(cast rest); // TODO: I am not sure
+        case Broke(e): Failure(e);
+      }))
+    );
+      
+  }
   
   public inline function append(that:Source<E>):Source<E> 
     return this.append(that);
